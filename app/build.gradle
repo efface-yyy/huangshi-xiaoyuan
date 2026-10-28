@@ -1,0 +1,40 @@
+apply plugin: 'com.android.application'
+
+android {
+    namespace 'com.smart.hgnu'
+    compileSdk 33
+
+    defaultConfig {
+        applicationId 'com.smart.hgnu'
+        minSdk 23
+        targetSdk 33
+        versionCode 1
+        versionName '0.1.0'
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_11
+        targetCompatibility JavaVersion.VERSION_11
+    }
+
+    // Release credentials are supplied locally; no signing key/password belongs in Git.
+    signingConfigs {
+        release {
+            if (System.getenv('HGNU_KEYSTORE_PATH')) {
+                storeFile file(System.getenv('HGNU_KEYSTORE_PATH'))
+                storePassword System.getenv('HGNU_STORE_PASSWORD')
+                keyAlias System.getenv('HGNU_KEY_ALIAS')
+                keyPassword System.getenv('HGNU_KEY_PASSWORD')
+            }
+        }
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled false
+            if (System.getenv('HGNU_KEYSTORE_PATH')) {
+                signingConfig signingConfigs.release
+            }
+        }
+    }
+}
