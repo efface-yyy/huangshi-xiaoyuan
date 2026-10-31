@@ -18,7 +18,7 @@
 
 ## 下载与安装
 
-在本仓库的 [Releases](https://github.com/efface-yyy/huangshi-xiaoyuan/releases) 下载 `黄师校园-0.2.0.apk`。当前为预览版，功能与服务兼容性仍在完善。0.2.0 沿用 0.1.0 的发布签名，可覆盖升级已安装的正式签名版本。
+在本仓库的 [Releases](https://github.com/efface-yyy/huangshi-xiaoyuan/releases) 下载 `smarthgnu-0.2.1.apk`，Release 名称为 `smarthgnu`。当前为预览版，功能与服务兼容性仍在完善。0.2.1 修复顶部额外系统标题栏，沿用原有发布签名，可覆盖升级已安装的 0.1.0、0.2.0 正式签名版本。
 
 要求 Android 6.0（API 23）及以上，并能够访问学校服务器。Release APK 已签名，安装后需自行输入校园账号；安装包不包含本机登录状态或测试数据。
 
