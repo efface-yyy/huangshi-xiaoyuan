@@ -1,11 +1,14 @@
 package com.smart.hgnu;
 
 import android.app.Activity;
+import android.content.res.ColorStateList;
 import android.graphics.Typeface;
 import android.graphics.drawable.GradientDrawable;
+import android.graphics.drawable.RippleDrawable;
 import android.text.InputType;
 import android.view.Gravity;
 import android.view.View;
+import android.widget.Button;
 import android.widget.EditText;
 import android.widget.LinearLayout;
 import android.widget.TextView;
@@ -83,6 +86,29 @@ class UiComponents {
         textView.setOnClickListener(view -> action.run());
         textView.setContentDescription(label);
         return textView;
+    }
+
+    protected Button createBackButton(Runnable action) {
+        Button button = new Button(activity);
+        button.setText("‹ 返回");
+        button.setContentDescription("返回服务目录");
+        button.setAllCaps(false);
+        button.setTextSize(14);
+        button.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
+        button.setTextColor(GREEN);
+        button.setGravity(Gravity.CENTER);
+        button.setPadding(dpToPx(14), 0, dpToPx(14), 0);
+        button.setMinHeight(dpToPx(48));
+        button.setMinWidth(dpToPx(80));
+        button.setStateListAnimator(null);
+        button.setElevation(0);
+        button.setBackground(
+                new RippleDrawable(
+                        ColorStateList.valueOf(0x24146c57),
+                        roundedBackground(0xffe9f0e9, 14),
+                        null));
+        button.setOnClickListener(view -> action.run());
+        return button;
     }
 
     protected EditText createInput(String hint, boolean password) {

@@ -27,11 +27,9 @@ public final class GradesActivity extends Activity {
         root.setOrientation(LinearLayout.VERTICAL);
         root.setPadding(24, 16, 24, 16);
         root.setBackgroundColor(0xfff5f7f2);
-        Button back = new Button(this);
-        back.setText("‹ 返回服务目录");
-        back.setContentDescription("返回服务目录");
-        back.setOnClickListener(v -> finish());
-        root.addView(back);
+        UiComponents ui = new UiComponents(this);
+        Button back = ui.createBackButton(this::finish);
+        root.addView(back, new LinearLayout.LayoutParams(ui.dpToPx(80), ui.dpToPx(48)));
         root.addView(label("成绩排名", 23));
         root.addView(label("成绩来自学校教务系统，最终结果以教务处公布为准。", 13));
         years = new Spinner(this);
