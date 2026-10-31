@@ -262,6 +262,42 @@ final class CampusController {
                 });
     }
 
+    interface GradeCallback {
+        void ready(Object data);
+
+        void failed(String message);
+    }
+
+    void loadGrades(String year, GradeCallback callback) {
+        int generation = sessionGeneration;
+        if (!state.loggedIn) {
+            callback.failed("请先登录校园账号");
+            return;
+        }
+        worker.execute(
+                () -> {
+                    try {
+                        Object data = year == null ? api.getGradeYears() : api.getGrades(year);
+                        mainThread.post(
+                                () -> {
+                                    if (generation == sessionGeneration && state.loggedIn)
+                                        callback.ready(data);
+                                    else callback.failed("会话已失效，请重新登录");
+                                });
+                    } catch (Exception exception) {
+                        mainThread.post(
+                                () -> {
+                                    if (generation != sessionGeneration) {
+                                        callback.failed("会话已失效，请重新登录");
+                                        return;
+                                    }
+                                    if (ErrorMessages.isExpiredSession(exception)) expireSession();
+                                    callback.failed(ErrorMessages.describe(exception));
+                                });
+                    }
+                });
+    }
+
     void signOut() {
         sessionGeneration++;
         // Deletion and revision invalidation complete before showing the logged-out UI.

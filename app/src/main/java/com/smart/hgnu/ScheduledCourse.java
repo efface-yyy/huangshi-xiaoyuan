@@ -4,7 +4,7 @@ import org.json.JSONArray;
 import org.json.JSONObject;
 
 import java.util.ArrayList;
-import java.util.Comparator;
+import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
@@ -55,10 +55,13 @@ final class ScheduledCourse {
                             + course.teacher;
             if (seen.add(identity)) result.add(course);
         }
-        result.sort(
-                Comparator.comparingInt((ScheduledCourse c) -> c.weekday)
-                        .thenComparingInt(c -> c.firstPeriod)
-                        .thenComparing(c -> c.title));
+        Collections.sort(
+                result,
+                (left, right) -> {
+                    int order = Integer.compare(left.weekday, right.weekday);
+                    if (order == 0) order = Integer.compare(left.firstPeriod, right.firstPeriod);
+                    return order == 0 ? left.title.compareTo(right.title) : order;
+                });
         return result;
     }
 }

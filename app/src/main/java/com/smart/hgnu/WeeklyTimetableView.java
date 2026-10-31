@@ -277,6 +277,8 @@ final class WeeklyTimetableView extends UiComponents {
     }
 
     /** Measure actual wrapped text instead of truncating every room to two lines. */
+    // API 23 Layout constants have the same values as the newer LineBreaker IntDef.
+    @android.annotation.SuppressLint("WrongConstant")
     private TextView fittedRoom(String value, int width, int height) {
         TextView room = createText(value, 9, GREEN, false);
         room.setIncludeFontPadding(false);

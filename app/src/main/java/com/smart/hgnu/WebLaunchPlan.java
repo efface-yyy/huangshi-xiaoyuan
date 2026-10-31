@@ -9,6 +9,7 @@ final class WebLaunchPlan {
     final String url;
     final String cookieOrigin;
     final Map<String, String> headers;
+    // An empty value expires a legacy root cookie before navigation.
     final Map<String, String> cookies;
 
     WebLaunchPlan(

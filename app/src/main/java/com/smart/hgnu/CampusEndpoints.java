@@ -6,7 +6,7 @@ final class CampusEndpoints {
     static final String KEY_EXCHANGE = "/open/security/asym/key";
     static final String LOGIN = "/open/auth/login";
     static final String NAVIGATION = "/api/getUserTabs";
-    static final String SERVICES = "/api/app/allList";
+    static final String SERVICES = "/api/app/list";
     static final String SEMESTERS = "/api/schedule/termParams";
     static final String COURSES = "/api/schedule/scheduleOfTerm";
     static final String SERVICE_SPRINGBOARD = "/api/lapp/springboard";

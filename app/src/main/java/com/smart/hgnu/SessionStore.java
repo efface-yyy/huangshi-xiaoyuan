@@ -7,7 +7,10 @@ import android.util.AtomicFile;
 
 import org.json.JSONObject;
 
+import java.io.ByteArrayOutputStream;
 import java.io.File;
+import java.io.FileInputStream;
+import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
@@ -38,10 +41,23 @@ final class SessionStore {
     }
 
     synchronized JSONObject load() throws Exception {
-        if (!file.getBaseFile().exists()) return null;
-        if (file.getBaseFile().length() > MAX_FILE_BYTES)
-            throw new IllegalStateException("Invalid session size");
-        byte[] bytes = file.readFully();
+        // openRead restores AtomicFile's backup after an interrupted write. Checking only the
+        // base file first would miss a recoverable backup on Android versions that use .bak.
+        byte[] bytes;
+        try (FileInputStream input = file.openRead();
+                ByteArrayOutputStream output = new ByteArrayOutputStream()) {
+            byte[] buffer = new byte[4096];
+            int count;
+            while ((count = input.read(buffer)) != -1) {
+                if (output.size() + count > MAX_FILE_BYTES)
+                    throw new IllegalStateException("Invalid session size");
+                output.write(buffer, 0, count);
+            }
+            bytes = output.toByteArray();
+        } catch (FileNotFoundException exception) {
+            if (!file.getBaseFile().exists()) return null;
+            throw exception;
+        }
         if (bytes.length < FORMAT.length + IV_LENGTH + 16)
             throw new IllegalStateException("Invalid session format");
         ByteBuffer input = ByteBuffer.wrap(bytes);

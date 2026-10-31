@@ -27,7 +27,7 @@ final class ServicesScreen extends BaseScreen {
 
     @Override
     void render() {
-        addPageHeading("校园服务", "找到你需要的校园入口。");
+        addPageHeading("校园服务", "学校为当前账号开放的服务。");
         EditText search = createInput("搜索服务，例如：图书馆、课表", false);
         search.setText(navigationState.serviceQuery);
         body.addView(search, new LinearLayout.LayoutParams(-1, dpToPx(50)));
@@ -56,13 +56,25 @@ final class ServicesScreen extends BaseScreen {
     private void renderServiceList(LinearLayout list, TextView summary) {
         list.removeAllViews();
         int count = 0;
+        String category = "";
         for (int index = 0; index < state.services.length(); index++) {
             JSONObject app = state.services.optJSONObject(index);
             if (app == null) continue;
             String title = jsonText(app, "YYMC");
-            if (!title.toLowerCase(Locale.ROOT)
-                    .contains(navigationState.serviceQuery.toLowerCase(Locale.ROOT))) continue;
+            String searchable =
+                    title + " " + jsonText(app, "YYMS") + " " + jsonText(app, "serviceCategory");
+            if (!searchable
+                    .toLowerCase(Locale.ROOT)
+                    .contains(navigationState.serviceQuery.trim().toLowerCase(Locale.ROOT)))
+                continue;
             count++;
+            String nextCategory = jsonText(app, "serviceCategory");
+            if (!nextCategory.equals(category)) {
+                category = nextCategory;
+                TextView heading = createText(category, 14, GREEN, true);
+                heading.setPadding(0, dpToPx(14), 0, dpToPx(10));
+                list.addView(heading);
+            }
             LinearLayout serviceRow = createRow();
             setUniformPadding(serviceRow, 15);
             serviceRow.setBackground(roundedBackground(0xffffffff, 16));
@@ -79,6 +91,9 @@ final class ServicesScreen extends BaseScreen {
             detail.setPadding(dpToPx(13), 0, dpToPx(8), 0);
             detail.addView(createText(title, 15, INK, true));
             String desc = jsonText(app, "YYMS");
+            if ("1".equals(jsonText(app, "LX"))
+                    && !"timetable".equals(jsonText(app, "YYID"))
+                    && !"score".equals(jsonText(app, "YYID"))) desc = "原生服务，暂未适配";
             if (!desc.isEmpty()) {
                 TextView descriptionLabel = createText(desc, 11, MUTED, false);
                 descriptionLabel.setMaxLines(1);
@@ -101,6 +116,10 @@ final class ServicesScreen extends BaseScreen {
     private void openService(JSONObject service) {
         String id = jsonText(service, "YYID");
         String type = jsonText(service, "LX");
+        if ("score".equals(id) && "1".equals(type)) {
+            activity.startActivity(new Intent(activity, GradesActivity.class));
+            return;
+        }
         if ("timetable".equals(id)) {
             actions.navigateTo(Page.TIMETABLE);
             return;
@@ -111,6 +130,7 @@ final class ServicesScreen extends BaseScreen {
         }
         activity.startActivity(
                 new Intent(activity, ServiceWebActivity.class)
-                        .putExtra(ServiceWebActivity.EXTRA_SERVICE_ID, id));
+                        .putExtra(ServiceWebActivity.EXTRA_SERVICE_ID, id)
+                        .putExtra(ServiceWebActivity.EXTRA_SERVICE_TYPE, type));
     }
 }

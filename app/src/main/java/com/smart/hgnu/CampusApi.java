@@ -106,28 +106,39 @@ public final class CampusApi {
     }
     /** GET the public key, register a random AES key, then decrypt the returned Unique-Code. */
     private void establishSession() throws Exception {
+        // Once renegotiation starts, an earlier code cannot be paired with a new key.
+        if (key != null) java.util.Arrays.fill(key, (byte) 0);
+        key = null;
+        uniqueCode = "";
         Map<String, String> headers = new LinkedHashMap<>();
         headers.put("Asym-Key", "public");
         String publicKey =
                 String.valueOf(
                         readSuccessfulData(
                                 sendRequest("GET", CampusEndpoints.KEY_EXCHANGE, headers, null)));
-        key = new byte[16];
-        new SecureRandom().nextBytes(key);
-        String json =
-                new JSONObject().put("sk", Base64.encodeToString(key, Base64.NO_WRAP)).toString();
-        headers.put("Asym-Key", "private");
-        String body = ProtocolCrypto.encryptKeyExchange(json, publicKey);
-        uniqueCode =
-                decrypt(
-                        String.valueOf(
-                                readSuccessfulData(
-                                        sendRequest(
-                                                "POST",
-                                                CampusEndpoints.KEY_EXCHANGE,
-                                                headers,
-                                                body))));
-        if (uniqueCode.isEmpty()) throw new ApiException("KEY", "无法建立安全会话");
+        byte[] candidateKey = new byte[16];
+        new SecureRandom().nextBytes(candidateKey);
+        boolean installed = false;
+        try {
+            String json =
+                    new JSONObject()
+                            .put("sk", Base64.encodeToString(candidateKey, Base64.NO_WRAP))
+                            .toString();
+            headers.put("Asym-Key", "private");
+            String body = ProtocolCrypto.encryptKeyExchange(json, publicKey);
+            Object encryptedCode =
+                    readSuccessfulData(
+                            sendRequest("POST", CampusEndpoints.KEY_EXCHANGE, headers, body));
+            if (!(encryptedCode instanceof String) || ((String) encryptedCode).isEmpty())
+                throw new ApiException("KEY", "无法建立安全会话");
+            String candidateCode = ProtocolCrypto.decryptAes((String) encryptedCode, candidateKey);
+            if (candidateCode.isEmpty()) throw new ApiException("KEY", "无法建立安全会话");
+            key = candidateKey;
+            uniqueCode = candidateCode;
+            installed = true;
+        } finally {
+            if (!installed) java.util.Arrays.fill(candidateKey, (byte) 0);
+        }
     }
 
     private Map<String, String> createAccessHeaders() throws Exception {
@@ -208,7 +219,39 @@ public final class CampusApi {
     }
 
     Object getServices() throws Exception {
-        return requestEncrypted("GET", CampusEndpoints.SERVICES, null);
+        // allList includes disabled and demonstration apps; list is the official account catalog.
+        Object data =
+                requestEncrypted(
+                        "GET",
+                        CampusEndpoints.SERVICES,
+                        new JSONObject()
+                                .put("zdlx", "3")
+                                .put("khdbb", CampusEndpoints.PROTOCOL_CLIENT_VERSION)
+                                .put("type", "1"));
+        if (!(data instanceof org.json.JSONArray)) throw new ApiException("FORMAT", "服务目录格式异常");
+        org.json.JSONArray services = new org.json.JSONArray();
+        org.json.JSONArray groups = (org.json.JSONArray) data;
+        for (int i = 0; i < groups.length(); i++) {
+            JSONObject group = groups.optJSONObject(i);
+            if (group == null) continue;
+            org.json.JSONArray items = group.optJSONArray("DATA");
+            if (items == null) continue;
+            for (int j = 0; j < items.length(); j++) {
+                JSONObject item = items.optJSONObject(j);
+                if (item == null) continue;
+                item.put("serviceCategory", JsonFields.text(group, "YYFL"));
+                services.put(item);
+            }
+        }
+        return services;
+    }
+
+    Object getGradeYears() throws Exception {
+        return requestEncrypted("GET", "/api/grade/schoolYears", null);
+    }
+
+    Object getGrades(String year) throws Exception {
+        return requestEncrypted("GET", "/api/grade/gradeList", new JSONObject().put("xn", year));
     }
 
     Object getSemesters() throws Exception {
@@ -228,28 +271,17 @@ public final class CampusApi {
         String type = JsonFields.text(service, "LX");
         String id = JsonFields.text(service, "YYID");
         String url;
-        if ("2".equals(type)) {
-            url =
-                    CampusEndpoints.BASE_URL
-                            + CampusEndpoints.SERVICE_SPRINGBOARD
-                            + "?yyid="
-                            + URLEncoder.encode(id, "UTF-8");
-        } else {
-            url = JsonFields.text(service, "URL").trim();
-            if (url.startsWith("//")) url = "http:" + url;
-            else if (url.startsWith("/")) url = CampusEndpoints.WEB_ORIGIN + url;
+        try {
+            url = ServiceRouting.resolve(type, id, JsonFields.text(service, "URL"));
+        } catch (IllegalArgumentException exception) {
+            throw new ApiException("SERVICE", exception.getMessage());
         }
-        android.net.Uri parsed = android.net.Uri.parse(url);
-        if (!("http".equalsIgnoreCase(parsed.getScheme())
-                        || "https".equalsIgnoreCase(parsed.getScheme()))
-                || parsed.getHost() == null
-                || parsed.getUserInfo() != null) throw new ApiException("SERVICE", "该服务不是可内嵌的网页入口");
         Map<String, String> headers = new LinkedHashMap<>();
         Map<String, String> cookies = new LinkedHashMap<>();
         String cookieOrigin = "";
-        // Only the official campus service host receives campus authentication material.
+        // Only the known campus service origin receives campus authentication material.
         // Redirects to third-party sites rely on the springboard's own SSO, never blanket headers.
-        if ("ydxy.hgnu.edu.cn".equalsIgnoreCase(parsed.getHost())) {
+        if (ServiceRouting.isCampusCredentialOrigin(url)) {
             if (key == null || uniqueCode.isEmpty()) establishSession();
             JSONObject token =
                     new JSONObject()
@@ -261,10 +293,14 @@ public final class CampusApi {
             headers.put("Access-Token", accessToken);
             headers.put("Unique-Code", uniqueCode);
             headers.put("AppType", "ydxy");
-            cookies.put("accessToken", accessToken);
-            cookies.put("uniqueCode", uniqueCode);
-            cookies.put("AppType", "ydxy");
-            cookieOrigin = parsed.getScheme() + "://" + parsed.getAuthority() + "/";
+            // Light apps authenticate through the springboard headers and redirect parameters.
+            // Root campus cookies override commonmodule's own auth and cause error 0006.
+            // Expire cookies left by older builds before launching; direct H5 still needs them.
+            boolean springboard = "2".equals(type);
+            cookies.put("accessToken", springboard ? "" : accessToken);
+            cookies.put("uniqueCode", springboard ? "" : uniqueCode);
+            cookies.put("AppType", springboard ? "" : "ydxy");
+            cookieOrigin = CampusEndpoints.WEB_ORIGIN + "/";
         }
         return new WebLaunchPlan(url, cookieOrigin, headers, cookies);
     }

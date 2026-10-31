@@ -1,6 +1,8 @@
 package com.smart.hgnu;
 
 import android.app.Activity;
+import android.content.Intent;
+import android.net.Uri;
 import android.os.Bundle;
 import android.os.Handler;
 import android.view.Gravity;
@@ -15,10 +17,12 @@ import java.util.Map;
 /** School service browser; launch credentials are never persisted in activity state. */
 public final class ServiceWebActivity extends Activity {
     static final String EXTRA_SERVICE_ID = "service_id";
+    static final String EXTRA_SERVICE_TYPE = "service_type";
     private final Handler handler = new Handler();
     private WebView browser;
     private ProgressBar progress;
     private TextView title;
+    private ServiceFileChooser fileChooser;
     private boolean stopped;
     private long deadline;
 
@@ -45,6 +49,7 @@ public final class ServiceWebActivity extends Activity {
         progress = new ProgressBar(this, null, android.R.attr.progressBarStyleHorizontal);
         root.addView(progress, new LinearLayout.LayoutParams(-1, dp(3)));
         browser = new WebView(this);
+        fileChooser = new ServiceFileChooser(this);
         WebSettings settings = browser.getSettings();
         settings.setJavaScriptEnabled(true);
         settings.setDomStorageEnabled(true);
@@ -66,6 +71,12 @@ public final class ServiceWebActivity extends Activity {
                     public void onProgressChanged(WebView view, int value) {
                         progress.setProgress(value);
                         progress.setVisibility(value == 100 ? View.GONE : View.VISIBLE);
+                    }
+
+                    @Override
+                    public boolean onShowFileChooser(
+                            WebView view, ValueCallback<Uri[]> callback, FileChooserParams params) {
+                        return fileChooser.show(callback, params);
                     }
                 });
         browser.setWebViewClient(
@@ -113,10 +124,13 @@ public final class ServiceWebActivity extends Activity {
         if (stopped) return;
         CampusState state = (CampusState) getApplication();
         String id = getIntent().getStringExtra(EXTRA_SERVICE_ID);
+        String type = getIntent().getStringExtra(EXTRA_SERVICE_TYPE);
         JSONObject service = null;
         for (int i = 0; i < state.services.length(); i++) {
             JSONObject candidate = state.services.optJSONObject(i);
-            if (candidate != null && candidate.optString("YYID").equals(id)) {
+            if (candidate != null
+                    && candidate.optString("YYID").equals(id)
+                    && candidate.optString("LX").equals(type)) {
                 service = candidate;
                 break;
             }
@@ -140,6 +154,7 @@ public final class ServiceWebActivity extends Activity {
                             return;
                         }
                         int[] remaining = {plan.cookies.size()};
+                        boolean[] rejected = {false};
                         for (Map.Entry<String, String> cookie : plan.cookies.entrySet()) {
                             CookieManager.getInstance()
                                     .setCookie(
@@ -147,11 +162,17 @@ public final class ServiceWebActivity extends Activity {
                                             cookie.getKey()
                                                     + "="
                                                     + cookie.getValue()
-                                                    + "; Path=/; SameSite=Lax",
+                                                    + "; Path=/; SameSite=Lax"
+                                                    + (cookie.getValue().isEmpty()
+                                                            ? "; Max-Age=0"
+                                                            : ""),
                                             accepted -> {
+                                                if (!Boolean.TRUE.equals(accepted))
+                                                    rejected[0] = true;
                                                 if (--remaining[0] == 0 && !stopped) {
                                                     CookieManager.getInstance().flush();
-                                                    browser.loadUrl(plan.url, plan.headers);
+                                                    if (rejected[0]) fail("无法建立服务网页会话，请重新进入");
+                                                    else browser.loadUrl(plan.url, plan.headers);
                                                 }
                                             });
                         }
@@ -162,6 +183,13 @@ public final class ServiceWebActivity extends Activity {
                         fail(message);
                     }
                 });
+    }
+
+    @Override
+    protected void onActivityResult(int requestCode, int resultCode, Intent data) {
+        super.onActivityResult(requestCode, resultCode, data);
+        if (requestCode == ServiceFileChooser.REQUEST_CODE)
+            fileChooser.onActivityResult(resultCode, data);
     }
 
     private void fail(String message) {
@@ -180,6 +208,7 @@ public final class ServiceWebActivity extends Activity {
     protected void onDestroy() {
         stopped = true;
         handler.removeCallbacksAndMessages(null);
+        fileChooser.cancel();
         browser.stopLoading();
         browser.destroy();
         super.onDestroy();

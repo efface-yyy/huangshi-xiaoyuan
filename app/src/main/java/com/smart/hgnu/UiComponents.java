@@ -99,7 +99,8 @@ class UiComponents {
                         ? InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_PASSWORD
                         : InputType.TYPE_CLASS_TEXT);
         inputView.setSaveEnabled(false);
-        inputView.setImportantForAutofill(View.IMPORTANT_FOR_AUTOFILL_NO);
+        if (android.os.Build.VERSION.SDK_INT >= 26)
+            inputView.setImportantForAutofill(View.IMPORTANT_FOR_AUTOFILL_NO);
         return inputView;
     }
 }
